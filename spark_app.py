@@ -52,11 +52,30 @@ def compare_schemas(first_df_schema: Dict[str,str], second_df_schema: Dict[str,s
     return schemas_are_equal, valid_schema_fields
 
 
-def add_hash_column(dataframe: DataFrame, exclude: Union[None, List[str]] = None):
+def add_hash_column(dataframe: DataFrame, hash_suffix: str, exclude: Union[None, List[str]] = None):
     columns_to_hash = dataframe.columns
     if exclude:
         columns_to_hash = [col for col in columns_to_hash if col not in exclude]
-    return dataframe.withColumn('hash', func.hash(*columns_to_hash))
+    return dataframe.withColumn(f"hash{hash_suffix}", func.hash(*columns_to_hash))
+
+
+def get_summary_of_dataframes(first_dataframe: DataFrame, second_dataframe: DataFrame, unique_identifier_columns_names: List[str]):
+    identifiers_with_hash_1 = unique_identifier_columns_names.copy()
+    identifiers_with_hash_2 = unique_identifier_columns_names.copy()
+    identifiers_with_hash_1.append('hash_1')
+    identifiers_with_hash_2.append('hash_2')
+    summary_df = first_dataframe.select(identifiers_with_hash_1).join(second_dataframe.select(identifiers_with_hash_2),on=unique_identifier_columns_names, how='full_outer').withColumn("status", 
+        func.when(condition=func.col('hash_1') == func.col('hash_2'), value='row_data_matching_between_dfs')
+        .when(condition=func.col(col='hash_1') != func.col('hash_2'), value = 'row_data_not_matching_between_dfs')
+        .when(condition=func.col(col='hash_1').isNull() & func.col('hash_2').isNotNull(), value='row_present_only_in_df2')
+        .when(condition=func.col(col='hash_2').isNull() & func.col('hash_1').isNotNull(), value='row_present_only_in_df1')
+        )
+    total_count = summary_df.count()
+    stats_df =  summary_df\
+                .groupBy("status")\
+                .agg(func.count("*").alias("row_count"))\
+                .withColumn("percentage_of_all_ids", func.round((func.col("row_count") / func.lit(total_count) * 100).cast("double"),2))
+    return stats_df
 
 
 def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_identifier_columns_names: list[str]) -> None:
@@ -75,9 +94,7 @@ def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_iden
     if not schemas_are_equal:
         dataframe1 = dataframe1.select(list(valid_schema_fields))
         dataframe2 = dataframe2.select(list(valid_schema_fields))        
-    dataframe1 = add_hash_column(dataframe1, exclude=unique_identifier_columns_names)
-    dataframe2 = add_hash_column(dataframe2,  exclude=unique_identifier_columns_names)
-    unique_identifier_columns_names.append('hash')
-    rows_with_same_values = dataframe1.select(unique_identifier_columns_names).join(dataframe2.select(unique_identifier_columns_names),on=unique_identifier_columns_names, how='inner').count()
-    logger.info(f"""There are {rows_with_same_values} rows with the same data in joined dataframes which is {round(rows_with_same_values / first_df_record_count * 100,2)}% of first dataframe total
-                and {round(rows_with_same_values / second_df_record_count * 100,2)}% of second dataframe total""")
+    dataframe1 = add_hash_column(dataframe1,hash_suffix="_1", exclude=unique_identifier_columns_names)
+    dataframe2 = add_hash_column(dataframe2,hash_suffix="_2", exclude=unique_identifier_columns_names)
+    stats_df = get_summary_of_dataframes(first_dataframe=dataframe1, second_dataframe=dataframe2, unique_identifier_columns_names=unique_identifier_columns_names)
+    stats_df.show()
