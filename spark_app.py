@@ -78,7 +78,7 @@ def get_summary_of_dataframes(first_dataframe: DataFrame, second_dataframe: Data
     return stats_df
 
 
-def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_identifier_columns_names: list[str]) -> None:
+def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_identifier_columns_names: list[str]) -> DataFrame:
     first_df_columns_list = get_column_list(dataframe1)
     second_df_columns_list = get_column_list(dataframe2)
     are_columns_lists_the_same, shared_columns = check_are_columns_list_the_same(first_df_columns_list,second_df_columns_list)
@@ -97,4 +97,4 @@ def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_iden
     dataframe1 = add_hash_column(dataframe1,hash_suffix="_1", exclude=unique_identifier_columns_names)
     dataframe2 = add_hash_column(dataframe2,hash_suffix="_2", exclude=unique_identifier_columns_names)
     stats_df = get_summary_of_dataframes(first_dataframe=dataframe1, second_dataframe=dataframe2, unique_identifier_columns_names=unique_identifier_columns_names)
-    stats_df.show()
+    return stats_df
