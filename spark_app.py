@@ -31,8 +31,10 @@ def get_records_count(dataframe: DataFrame) -> int:
 def compare_records_count(first_df_count: int, second_df_count:int):
     if first_df_count != second_df_count:
         logger.info(f"Discrepancy in row count. First df row count: {first_df_count}. Second df row count: {second_df_count}")
+        return False
     else:
         logger.info(f"Dataframes have the same row count: {first_df_count}")
+        return True
 
 def get_schema_details(dataframe: DataFrame):
     schema_dict = {}
@@ -40,16 +42,18 @@ def get_schema_details(dataframe: DataFrame):
         schema_dict[field.name]=field.dataType.typeName()
     return schema_dict
 
-def compare_schemas(first_df_schema: Dict[str,str], second_df_schema: Dict[str,str], columns_list: Set[str])-> tuple[bool, list[str]]:
+def compare_schemas(first_df_schema: Dict[str,str], second_df_schema: Dict[str,str], columns_list: Set[str]) -> tuple[bool, list[str], list[str]]:
     valid_schema_fields = []
+    invalid_schemas_fields = []
     schemas_are_equal = True
     for field in columns_list:
         if not first_df_schema[field] == second_df_schema[field]:
             logger.info(f"Schema mismatch for field: {field}. First dataframe type: {first_df_schema[field]}, second dataframe type: {second_df_schema[field]}")
             schemas_are_equal = False
+            invalid_schemas_fields.append(field)
         else:
             valid_schema_fields.append(field)
-    return schemas_are_equal, valid_schema_fields
+    return schemas_are_equal, valid_schema_fields, invalid_schemas_fields
 
 
 def add_hash_column(dataframe: DataFrame, hash_suffix: str, exclude: Union[None, List[str]] = None):
@@ -78,6 +82,10 @@ def get_summary_of_dataframes(first_dataframe: DataFrame, second_dataframe: Data
     return stats_df
 
 
+def convert_json_to_pyspark_df(json_oobject: List[dict], spark_object: SparkSession):
+    return spark_object.createDataFrame(data=json_oobject)
+
+
 def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_identifier_columns_names: list[str]) -> DataFrame:
     first_df_columns_list = get_column_list(dataframe1)
     second_df_columns_list = get_column_list(dataframe2)
@@ -90,7 +98,7 @@ def compare_dataframes(dataframe1: DataFrame, dataframe2: DataFrame, unique_iden
     compare_records_count(first_df_count=first_df_record_count,second_df_count=second_df_record_count)
     first_df_schema = get_schema_details(dataframe1)
     second_df_schema = get_schema_details(dataframe2)
-    schemas_are_equal, valid_schema_fields = compare_schemas(first_df_schema=first_df_schema, second_df_schema=second_df_schema, columns_list=shared_columns)
+    schemas_are_equal, valid_schema_fields, invalid_schemas_fields = compare_schemas(first_df_schema=first_df_schema, second_df_schema=second_df_schema, columns_list=shared_columns)
     if not schemas_are_equal:
         dataframe1 = dataframe1.select(list(valid_schema_fields))
         dataframe2 = dataframe2.select(list(valid_schema_fields))        
